@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Turing the Tables</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <div class="chat-container">
+            <div class="chat-header">
+                <img src="assets/llama.png" alt="Logo" class="logo">
+                <h1>Turing the Tables</h1>
+                <div class="actions">
+                    <button id="startGame" class="action-button">Start Game</button>
+                    <button id="nextTurn" class="action-button" disabled>Play Turn</button>
+                    <label for="autopilot" class="action-button">
+                        <input type="checkbox" id="autopilot"> Autopilot
+                    </label>
+                </div>
+            </div>
+            <div id="chat" class="chat-box"></div>
+        </div>
+        <div class="sidebar">
+            <h2>Status</h2>
+            <div id="statusMessage"></div>
+            <div id="turnCounter"><b>Turn</b>: 0</div>
+            <div id="loser"></div>
+            <canvas id="votesChart"></canvas>
+        </div>
+    </div>
+    <footer>
+        <a href="https://rajatasusual.github.io" title="Github profile" target="_blank">Created by Rajat</a>
+        |
+        <a href="https://www.github.com/rajatasusual/llamapp" title="Github repository" target="_blank">
+            <img src="assets/open source.png" alt="Github" class="icon">
+        </a>
+    </footer>
+    <script src="script.js" defer></script>
+</body>
+
+</html>
