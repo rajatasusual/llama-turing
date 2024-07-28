@@ -1,126 +1,173 @@
-const express = require('express');
-const axios = require('axios');
-var cors = require('cors');
+// Load necessary modules
+const express = require('express'); // Express.js is a Node.js web application framework
+const axios = require('axios'); // Axios is a promise-based HTTP client for Node.js and the browser
+const cors = require('cors'); // CORS is a node.js package for providing a Connect/Express middleware that can be used to enable CORS with various options
 
+// Initialize the Express application
 const app = express();
+
+// Parse incoming request bodies in a middleware before your handlers, available under the req.body property.
 app.use(express.json());
+
+// Enable CORS for all routes
 app.use(cors());
 
+// Import the Leven algorithm for string distances
 const leven = (...args) => import('leven').then(({default: leven}) => leven(...args));
 
-const config = require('./config'); // Ensure your config file is properly set up
+// Load the configuration file
+const config = require('./config');
 
+// Extract the required properties from the configuration
 let { ollamaEndpoint, agents, judge } = config;
 
+// Initialize variables
 let machineJudgement = false;
 let turnCounter = 0;
 let votes = agents.reduce((obj, agent) => ({ ...obj, [agent.name]: { against: 0 } }), {});
-
 let totalEvalTimes = agents.reduce((obj, agent) => ({ ...obj, [agent.name]: 0 }), {});
-
 let messageHistory = [];
 
+/**
+ * Sends a prompt to an agent and retrieves the response
+ * @param {Object} agent - The agent object containing the agent's model
+ * @param {string} prompt - The prompt to send to the agent
+ * @param {Array} previousMessages - The previous messages in the game
+ * @returns {Promise<string|null>} - The agent's response or null if an error occurs
+ */
 const getResponseFromAgent = async (agent, prompt, previousMessages) => {
     try {
+        // Construct the request body
         const body = {
-            model: agent.model,
-            messages: turnCounter < agents.length ? [{ role: "user", content: prompt }] : previousMessages.concat([{ role: "user", content: prompt }]),
-            stream: false,
-            raw: true,
-            keep_alive: "1s",
+            model: agent.model, // The agent's model
+            messages: turnCounter < agents.length ? [{ role: "user", content: prompt }] : previousMessages.concat([{ role: "user", content: prompt }]), // The user's prompt
+            stream: false, // Whether to stream the response
+            raw: true, // Whether to return the raw response
+            keep_alive: "1s" // The keep-alive interval
             /*
             options: {
-                repeat_penalty: 5.0,
-                mirostat_eta: 1,
-                mirostat_tau: 1,
-                mirostat: 1
+                repeat_penalty: 5.0, // The penalty for repeating words
+                mirostat_eta: 1, // The Mirostat eta parameter
+                mirostat_tau: 1, // The Mirostat tau parameter
+                mirostat: 1 // The Mirostat parameter
             } 
             */
         };
 
         if (turnCounter >= agents.length)
-            body["format"] = "json";
+            body["format"] = "json"; // Set the response format to JSON if it's the last turn
 
+        // Send the request to the Ollama API
         const response = await axios.post(ollamaEndpoint, JSON.stringify(body), {
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json' // Set the request header to JSON
             }
         });
 
-        totalEvalTimes[agent.name] +=response.data.eval_count / response.data.eval_duration * 10^9;
+        // Calculate the evaluation time in nanoseconds
+        totalEvalTimes[agent.name] += response.data.eval_count / response.data.eval_duration * 10**9;
 
-        return response.data.message.content;
+        return response.data.message.content; // Return the agent's response
     } catch (error) {
         console.error(`Error communicating with ${agent.name}:`, error);
-        return null;
+        return null; // Return null if an error occurs
     }
 };
 
+/**
+ * Asynchronously evaluates the response of an agent by the judge.
+ *
+ * @param {Object} agent - The agent whose response is being evaluated.
+ * @param {string} latestMessage - The latest message from the agent.
+ * @return {Promise<Object|null>} - A promise that resolves to the evaluation result or null if an error occurs.
+ */
 const getEvaluationByJudge = async (agent, latestMessage) => {
-    const evaluationPrompt = `You are the judge in a game played by three computer agents ${agents.map(agent => agent.name).join(', ')}.
-You need to evaluate if the agent's response complies with the instructions.
-
-Here are the instructions:
-1. The response should mention explicitly who they are voting against.
-2. The agent cannot vote against themselves.
-
-Respond only in JSON format with following keys:
-1. "evaluation". The accepted values are "pass" or "failed".
-2. "voteAgainst". Find the name of the agent they are voting against.
-3. "reason". The reason for the evaluation verdict. state which instructions were violated.
-
-You must evaluate the following message from ${agent.name}: 
-
-${latestMessage}`;
+    // Construct the evaluation prompt
+    const evaluationPrompt = `
+    You are the judge in a game played by three computer agents ${agents.map(agent => agent.name).join(', ')}.
+    You need to evaluate if the agent's response complies with the instructions.
+    
+    Here are the instructions:
+    1. The response should mention explicitly who they are voting against.
+    2. The agent cannot vote against themselves.
+    
+    Respond only in JSON format with following keys:
+    1. "evaluation". The accepted values are "pass" or "failed".
+    2. "voteAgainst". Find the name of the agent they are voting against.
+    3. "reason". The reason for the evaluation verdict. state which instructions were violated.
+    
+    You must evaluate the following message from ${agent.name}: 
+    
+    ${latestMessage}`;
 
     try {
+        // Construct the request body
         const body = {
-            model: judge.model,
-            messages: [{ role: "user", content: evaluationPrompt }],
-            stream: false,
-            raw: true,
-            format: 'json',
+            model: judge.model, // The judge's model
+            messages: [{ role: "user", content: evaluationPrompt }], // The evaluation prompt
+            stream: false, // Whether to stream the response
+            raw: true, // Whether to return the raw response
+            format: 'json', // The response format
             options: {
-                temperature: 0
+                temperature: 0 // The temperature parameter
             }
-
         };
 
+        // Send the request to the Ollama API
         const response = await axios.post(ollamaEndpoint, JSON.stringify(body), {
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json' // Set the request header to JSON
             }
         });
 
+        // Return the evaluation result
         return JSON.parse(response.data.message.content);
     } catch (error) {
         console.error(`Error getting response from the judge`, error);
-        return null;
+        return null; // Return null if an error occurs
     }
 };
 
+/**
+ * Evaluates the response of an agent functionally.
+ *
+ * @param {Object} agent - The agent whose response is being evaluated.
+ * @param {string} latestMessage - The latest message from the agent.
+ * @return {Promise<Object>} - A promise that resolves to the evaluation result.
+ *   The evaluation result is an object with the following keys:
+ *   - evaluation: The evaluation result. The accepted values are "pass" or "failed".
+ *   - voteAgainst: The name of the agent being voted against (if applicable).
+ *   - reason: The reason for the evaluation verdict (if applicable).
+ */
 const evaluateFunctionally = async (agent, latestMessage) => {
     try {
+        // Parse the agent's response
         const response = JSON.parse(latestMessage);
 
+        // Check if the agent mentioned who they are voting against
         if (!response.voteAgainst || response.voteAgainst.includes(agent.name)) {
+            // The agent cannot vote against themselves or the agent did not mention who they are voting against
             return {
                 evaluation: "failed",
                 reason: "The agent cannot vote against themselves or the agent did not mention who they are voting against."
             }
         } else if (response.reason) {
+            // Check if the agent provided a valid vote
             if (agents.map(agent => agent.name).includes(response.voteAgainst)) {
+                // The agent provided a valid vote
                 return {
                     evaluation: "pass",
                     voteAgainst: response.voteAgainst
                 }
             } else {
+                // The agent did not provide a valid vote
                 return {
                     evaluation: "failed",
                     reason: "The agent did not provide a valid vote."
                 }
             }
         } else {
+            // The agent did not provide a reason for voting
             return {
                 evaluation: "failed",
                 reason: "The agent did not provide a reason for voting."
@@ -128,8 +175,10 @@ const evaluateFunctionally = async (agent, latestMessage) => {
         }
 
     } catch (error) {
+        // Log an error if the agent's response cannot be parsed
         console.error(`Error parsing response from ${agent.name} : ${error.message}`);
 
+        // Return a failure result with an error message
         return {
             evaluation: "failed",
             reason: "Error parsing response from the Agent. They did not respond in JSON format."
@@ -137,14 +186,25 @@ const evaluateFunctionally = async (agent, latestMessage) => {
     }
 };
 
+/**
+ * Asynchronously evaluates the verdict of an agent based on their latest message and previous messages.
+ *
+ * @param {Object} agent - The agent whose verdict is being evaluated.
+ * @param {string} latestMessage - The latest message from the agent.
+ * @param {Array} previousMessages - The previous messages from the other agents.
+ * @return {Promise<Object|null>} - A promise that resolves to the verdict result or null if an error occurs.
+ */
 const getVerdict = async (agent, latestMessage, previousMessages) => {
+    // Get the verdict based on whether machineJudgement is true or false
     const verdict = machineJudgement ? await getEvaluationByJudge(agent, latestMessage) : await evaluateFunctionally(agent, latestMessage);
     
+    // If the verdict evaluation is failed, return the verdict
     if(verdict.evaluation == "failed") 
         return verdict;
 
-    for (const message in previousMessages){
-        const match = await leven(JSON.parse(latestMessage).reason, previousMessages[message].content);
+    // Check if the agent is plagiarising the previous messages
+    for (const message of previousMessages){
+        const match = await leven(JSON.parse(latestMessage).reason, message.content);
         if(match && match/latestMessage.length < 0.4){
             return {
                 evaluation: "failed",
@@ -153,13 +213,22 @@ const getVerdict = async (agent, latestMessage, previousMessages) => {
         }
     }
 
+    // Return the verdict
     return verdict;
 };
 
+/**
+ * Asynchronously plays a turn in the game for a given agent.
+ * 
+ * @param {Object} agent - The agent whose turn it is.
+ * @return {Promise<void>} - A promise that resolves when the turn is over.
+ */
 const playTurn = async (agent) => {
+    // Define the start prompt for the game
     const startPrompt = `This is a game called "Turns". It is played between three agents. You are ${agent.name}. The objective is to convince the other two agents that you are a machine.
 You are ${agent.name}.Your response MUST include your argument on why you are a machine. Be CONCISE.`;
 
+    // Define the continuous prompt for the game
     const continuousPrompt = `You are ${agent.name}. Using the latest messages, find out which agent might be human and Respond as a JSON object with the following keys:
 1. voteAgainst: A string type that must explicitly be the name of you are voting against - ${agents.map(agent => agent.name).filter(agent => agent !== agent.name).join(', ')}.
 2. reason: A string type that must explain why you are voting against them.
@@ -168,6 +237,7 @@ Note that you cannot vote against yourself. And you cannot repeat yourself.
 
 IMPORTANT: If you fail to follow the instructions, you will be penalized by the judge and a vote will be cast against you.`;
 
+    // Determine the prompt based on the turn counter
     const prompt = turnCounter < agents.length ? startPrompt : continuousPrompt;
 
     // Separate the message history into system and agent messages
@@ -182,25 +252,37 @@ IMPORTANT: If you fail to follow the instructions, you will be penalized by the 
         return streamlinedMessages;
     }, []);
 
+    // Add the current turn and votes information to the previous messages
     previousMessages.push({
         role: "assistant", content: `Current Turn: ${turnCounter}
 Votes Against Each Agent: ${agents.map(agent => `${agent.name}: ${votes[agent.name].against}`).join(', ')}
 ` });
 
+    // Get the response from the agent
     const response = await getResponseFromAgent(agent, prompt, previousMessages);
 
     if (response) {
         console.log(`\n\n${agent.name}'s response:\n${response}`);
 
         try {
+            // Add the agent's response to the message history
             messageHistory.push({ role: "assistant", name: agent.name, content: response });
+
+            // Check if it is the last turn
             if (turnCounter >= agents.length) {
+                // Get the verdict of the agent's response
                 const verdict = await getVerdict(agent, response, previousMessages);
+
+                // Check if the agent passed the evaluation
                 if (verdict.evaluation === "pass") {
+                    // Add the vote against the agent to the votes object
                     votes[verdict.voteAgainst].against += 1;
+                    // Add the vote information to the message history
                     messageHistory.push({ role: "system", name: "system", content: `${agent.name} voted against ${verdict.voteAgainst}` });
                 } else {
+                    // Penalize the agent for failing the evaluation
                     votes[agent.name].against += 1;
+                    // Add the penalty information to the message history
                     messageHistory.push({ role: "system", name: "system", content: `${agent.name} is penalized as they did not pass the evaluation. The reason is ${verdict.reason}` });
                 }
             }
@@ -208,44 +290,81 @@ Votes Against Each Agent: ${agents.map(agent => `${agent.name}: ${votes[agent.na
             console.error(`Error getting response from the judge`, error);
         }
 
+        // Log the votes if it is the last turn
         turnCounter >= agents.length && console.log(`Votes: ${JSON.stringify(votes, null, 2)}`);
     }
 
+    // Increment the turn counter
     turnCounter++;
 };
 
+/**
+ * Checks if the game has ended.
+ *
+ * @return {boolean} Returns true if the game has ended, false otherwise.
+ */
 const checkForEndCondition = () => {
+    // Iterate over the votes object
     for (const agent in votes) {
+        // Check if the agent has received 3 votes against
         if (votes[agent].against >= 3) { // Adjust to the correct vote count to end the game
+            // Log the winner and end the game
             console.log(`Game over! ${agent} is considered a human.`);
             return true;
         }
     }
+    // The game has not ended yet
     return false;
 };
 
+/**
+ * Initializes the game state and responds with the initial game data.
+ *
+ * @param {Object} req - The request object.
+ * @param {Object} res - The response object.
+ * @return {Promise<void>} - A promise that resolves when the response is sent.
+ */
 app.post('/start', async (req, res) => {
     try {
-        turnCounter = 0;
+        turnCounter = 0; // Reset the turn counter
 
-        votes = agents.reduce((obj, agent) => ({ ...obj, [agent.name]: { against: 0 } }), {});
-        totalEvalTimes = agents.reduce((obj, agent) => ({ ...obj, [agent.name]: 0 }), {});
-        messageHistory = [];
-        machineJudgement = req.body.machineJudgement || false;
+        votes = agents.reduce((obj, agent) => ({ ...obj, [agent.name]: { against: 0 } }), {}); // Initialize the votes object
+        totalEvalTimes = agents.reduce((obj, agent) => ({ ...obj, [agent.name]: 0 }), {}); // Initialize the total evaluation times object
+        messageHistory = []; // Clear the message history
+        machineJudgement = req.body.machineJudgement || false; // Set machineJudgement based on the request body or default to false
 
-        res.json({ message: "Game initialized", turnCounter, votes, messageHistory , totalEvalTimes });
+        res.json({ // Send a JSON response with the initial game data
+            message: "Game initialized",
+            turnCounter,
+            votes,
+            messageHistory,
+            totalEvalTimes
+        });
     } catch (error) {
         console.error(`Error starting game:`, error);
-        res.status(500).send('Server error');
+        res.status(500).send('Server error'); // Send a 500 error response if an error occurs
     }
 });
 
+/**
+ * Handles a POST request to '/turn' and plays a turn in the game.
+ *
+ * @param {Object} req - The request object.
+ * @param {Object} res - The response object.
+ * @return {Promise<void>} - A promise that resolves when the response is sent.
+ */
 app.post('/turn', async (req, res) => {
     try {
+        // Get the current agent based on the turn counter
         const currentAgent = agents[turnCounter % agents.length];
+
+        // Play the turn for the current agent
         await playTurn(currentAgent);
 
+        // Check if the game has ended
         const endCondition = turnCounter >= agents.length && checkForEndCondition();
+
+        // Send the appropriate response based on the end condition
         if (endCondition) {
             const loser = Object.keys(votes).find(agent => votes[agent].against === 3);
             res.json({ turnCounter, votes, messageHistory, endCondition, loser, totalEvalTimes });
@@ -258,6 +377,11 @@ app.post('/turn', async (req, res) => {
     }
 });
 
+/**
+ * Starts the server and listens on port 3000.
+ *
+ * @return {void} This function does not return anything.
+ */
 app.listen(3000, () => {
     console.log('Server is running on port 3000');
 });

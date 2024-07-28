@@ -1,10 +1,20 @@
+/* Import the Poppins font from Google Fonts */
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
 
+/* Set the font family to Poppins for the entire body */
 body {
     font-family: 'Poppins', sans-serif;
+}
+
+/* Center the content vertically and horizontally */
+body {
     display: flex;
     justify-content: center;
     align-items: center;
+}
+
+/* Set the background gradient */
+body {
     background: linear-gradient(-45deg, #CECFCF, #35A1CB, #ACE2F9);
     background-size: 400% 400%;
     animation: gradient 15s ease infinite;
@@ -12,18 +22,14 @@ body {
     margin: 0;
 }
 
+/* Define the gradient animation */
 @keyframes gradient {
-    0% {
-        background-position: 0% 50%;
-    }
-    50% {
-        background-position: 100% 50%;
-    }
-    100% {
-        background-position: 0% 50%;
-    }
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
 }
 
+/* Container for the chat and sidebar */
 .container {
     display: flex;
     width: 90%;
@@ -37,12 +43,14 @@ body {
     overflow: hidden;
 }
 
+/* Chat container */
 .chat-container {
     flex: 2;
     display: flex;
     flex-direction: column;
 }
 
+/* Header of the chat */
 .chat-header {
     display: flex;
     justify-content: space-between;
@@ -54,21 +62,25 @@ body {
     backdrop-filter: blur(10px);
 }
 
+/* Logo image */
 .logo {
     width: 40px;
     transition: width 0.3s ease-in-out;
 }
 
+/* Increase the size of the logo on hover */
 .logo:hover {
     width: 50px;
 }
 
+/* Action buttons container */
 .actions {
     display: flex;
     align-items: center;
     gap: 10px;
 }
 
+/* Action button styles */
 .action-button {
     background-color: #FFC995;
     border: none;
@@ -79,15 +91,18 @@ body {
     transition: transform 0.3s;
 }
 
+/* Disable action button on disable */
 .action-button:disabled {
     background-color: #CECFCF;
     cursor: not-allowed;
 }
 
+/* Scale up action button on hover */
 .action-button:hover {
     transform: scale(1.1);
 }
 
+/* Footer styles */
 footer {
     position: absolute;
     bottom: 0;
@@ -102,11 +117,10 @@ footer {
     justify-content: center;
     align-items: center;
     gap: 10px;
-    /* Space between items */
     box-shadow: 0 -2px 10px #CECFCF72;
-    /* Shadow for depth */
 }
 
+/* Footer link styles */
 footer a {
     color: #ACE2F9;
     text-decoration: none;
@@ -115,22 +129,25 @@ footer a {
     align-items: center;
 }
 
+/* Change link color on hover */
 footer a:hover {
     color: #FFC995;
 }
 
+/* Footer icon styles */
 footer .icon {
     width: 72px;
     height: 25px;
-    /* Size of the icon */
     margin-right: 5px;
     transition: transform 0.3s;
 }
 
+/* Increase size of the icon on hover */
 footer a:hover .icon {
     transform: scale(1.2);
 }
 
+/* Chat box styles */
 .chat-box {
     flex: 1;
     padding: 10px;
@@ -140,12 +157,14 @@ footer a:hover .icon {
     backdrop-filter: blur(10px);
 }
 
+/* Message styles */
 .message {
     margin-bottom: 10px;
     display: flex;
     align-items: center;
 }
 
+/* System message styles */
 .message.system {
     background-color: #1A2A73;
     padding: 10px;
@@ -153,24 +172,28 @@ footer a:hover .icon {
     color: #FFF;
 }
 
+/* Agent message styles */
 .message.agent {
     padding: 10px;
     border-radius: 20px;
     color: #000;
 }
 
+/* Message icon styles */
 .message .icon {
     font-weight: bold;
     margin-right: 10px;
     font-size: large;
 }
 
+/* Read more link styles */
 .read-more-link {
     color: #1A2A73;
     cursor: pointer;
     text-decoration: underline;
 }
 
+/* Sidebar styles */
 .sidebar {
     flex: 1;
     padding: 20px;
@@ -181,24 +204,29 @@ footer a:hover .icon {
     border-left: 1px solid rgba(255, 255, 255, 0.2);
 }
 
+/* Sidebar header styles */
 .sidebar h2 {
     color: #1A2A73;
 }
 
+/* Chart styles */
 canvas {
     width: 100%;
     height: 400px;
 }
 
+/* Status message styles */
 #statusMessage {
     margin-bottom: 10px;
     font-weight: bold;
 }
 
+/* Turn counter styles */
 #turnCounter {
     margin-bottom: 10px;
 }
 
+/* Loser message styles */
 #loser {
     margin-bottom: 20px;
     font-size: 18px;

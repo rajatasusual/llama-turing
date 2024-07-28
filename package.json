@@ -8,7 +8,7 @@
   "keywords": [],
   "author": "Rajat Kumar <www.github.com/rajatasusual>",
   "license": "ISC",
-  "description": "",
+  "description": "Turing the Tables: a game between three computer agents. The objective is to convince the other two agents that you are a machine. There's penalties, judgement and bonkers fun",
   "dependencies": {
     "axios": "^1.7.2",
     "cors": "^2.8.5",
