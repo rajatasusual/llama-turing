@@ -1,8 +1,20 @@
-let chart = null;
+let votesChart = null;
+let timesChart = null;
 let turnCounter = 0;
 let autopilot = false;
 
-const MAX_CHAR_LIMIT = 200;
+const MAX_CHAR_LIMIT = 256;
+
+const agentColors = [
+    'rgba(54, 162, 235, 0.2)',
+    'rgba(255, 206, 86, 0.2)',
+    'rgba(75, 192, 192, 0.2)',
+    'rgba(153, 102, 255, 0.2)',
+    'rgba(255, 159, 64, 0.2)',
+    'rgba(255, 99, 132, 0.2)'
+];
+
+let totalAgents = 0;
 
 document.getElementById('startGame').addEventListener('click', async () => {
     startGame();
@@ -37,8 +49,11 @@ const executeTurn = async () => {
     if (response.ok) {
         const data = await response.json();
         updateChat(data.messageHistory);
-        updateChart(data.votes);
+        updateVotesChart(data.votes);
+        updateEvalTimesChart(data.totalEvalTimes);
+
         turnCounter = data.turnCounter;
+
         updateTurnCounter();
 
         if (data.endCondition) {
@@ -80,9 +95,15 @@ const processMessage = (message) => {
 const updateChat = (messageHistory) => {
     const chatBox = document.getElementById('chat');
     chatBox.innerHTML = '';
+    let agentMessageNo = 0;
     messageHistory.forEach(message => {
         const messageElement = document.createElement('div');
         messageElement.className = 'message ' + (message.role === 'system' ? 'system' : 'agent');
+
+        if (message.role !== 'system') {
+            messageElement.style.backgroundColor = agentColors[agentMessageNo];
+            agentMessageNo = (agentMessageNo + 1) % totalAgents;
+        }
 
         const iconElement = document.createElement('span');
         iconElement.className = 'icon';
@@ -126,23 +147,23 @@ const getIcon = (name) => {
     return name.split('')[0].toUpperCase();
 };
 
-const updateChart = (votes) => {
+const updateVotesChart = (votes) => {
     const ctx = document.getElementById('votesChart').getContext('2d');
 
     // Update chart
-    if (chart) { // If chart exists, update it
-        chart.data.datasets[0].data = Object.values(votes).map(vote => vote.against);
-        chart.update();
+    if (votesChart) { // If chart exists, update it
+        votesChart.data.datasets[0].data = Object.values(votes).map(vote => vote.against);
+        votesChart.update();
         return;
     }
-    chart = new Chart(ctx, {
+    votesChart = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: Object.keys(votes),
             datasets: [{
                 label: 'Votes Against',
                 data: Object.values(votes).map(vote => vote.against),
-                backgroundColor: ['#FFC995', '#35A1CB', '#1A2A73']
+                backgroundColor: agentColors
             }]
         },
         options: {
@@ -150,6 +171,38 @@ const updateChart = (votes) => {
                 y: {
                     beginAtZero: true,
                     max: 3,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+};
+
+const updateEvalTimesChart = (totalEvalTimes) => {
+    const ctx = document.getElementById('evalTimesChart').getContext('2d');
+
+    // Update chart
+    if (timesChart) { // If chart exists, update it
+        timesChart.data.datasets[0].data = Object.values(totalEvalTimes);
+        timesChart.update();
+        return;
+    }
+    timesChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: Object.keys(totalEvalTimes),
+            datasets: [{
+                label: 'Total Evaluation Time (s)',
+                data: Object.values(totalEvalTimes),
+                backgroundColor: agentColors
+            }]
+        },
+        options: {
+            scales: {
+                x: {
+                    beginAtZero: true,
                     ticks: {
                         stepSize: 1
                     }
@@ -218,9 +271,14 @@ const startGame = async () => {
         document.getElementById('chat').innerHTML = ''; // Clear chat
         document.getElementById('nextTurn').disabled = false;
         document.getElementById('autopilot').disabled = false;
-        updateChat(data.messageHistory);
-        updateChart(data.votes);
+
         turnCounter = 0;
+        totalAgents = Object.keys(data.votes).length;
+
+        updateChat(data.messageHistory);
+        updateVotesChart(data.votes);
+        updateEvalTimesChart(data.totalEvalTimes);
+
         updateTurnCounter();
         clearLoser();
         setStatusMessage('Game started.');
