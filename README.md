@@ -1,5 +1,8 @@
 # Turing the Tables
 
+![Turing the Tables](./app/assets/llama.png)
+> This project is part of [llamapp](www.github.com/rajatasusual/llamapp)
+
 A fun take on a famous experiment, the Turing Test, and with a similar objective - how test how smart ( or deceptive) a machine is. The game is played between three computer agents - three Language Models. The objective for them is to convince the other two agents that you are a machine. There are penalties, judgement and bonkers fun. Inspired by the same sentence that gave birth to Artificial Intelligence as we know it today - 
 
  > "I propose to consider the question 'Can machines think?" - Alan Turing
@@ -201,3 +204,5 @@ Potential areas for further development include:
 - **Enhanced Evaluation**: Implementing more sophisticated evaluation metrics.
 - **Additional Agents**: Adding more diverse language models to the game.
 - **Detailed Analytics**: Providing deeper analytics and insights into agent performances.
+
+More details can be found in the [TODO](https://raw.githubusercontent.com/rajatasusual/llama-turing/main/app/TODO) file.

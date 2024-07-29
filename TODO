@@ -1,0 +1,12 @@
+1. [Refactor]Decouple game logic from server.
+2. [Refactor] Reuse game logic for building a CLI version.
+3. [Experiment] Revisit rules and flow of the game.
+6. [Enhancement] Edit responses and resend.
+7. [Experiment] Try to add generate mode instead of chat completion.
+9. [Enhancement] Dialog flow for dynamic conversation.
+10. [Improvement] Avoid the trap where if one agent replies in bad format, others follow.
+11. [Refactor] .env file and config.js
+12. [Enhancement] Store game state on browser
+13. [UX] Agent Typing to show processing
+14. [Bug] Correction Flow is not correct. Check prompt and update as corrected ones are not getting changed; which leads to -> 15.
+15. [Bug] Conversation history doesn't seem to be moving agents correctly. Eg. plagiarised messages are looked by subsequent bot and answered upon.
