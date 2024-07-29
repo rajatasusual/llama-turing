@@ -13,13 +13,13 @@ app.use(express.json());
 app.use(cors());
 
 // Import the Leven algorithm for string distances
-const leven = (...args) => import('leven').then(({default: leven}) => leven(...args));
+const leven = (...args) => import('leven').then(({ default: leven }) => leven(...args));
 
 // Load the configuration file
 const config = require('./config');
 
 // Extract the required properties from the configuration
-let { ollamaEndpoint, agents, judge } = config;
+let { ollamaEndpoint, agents, judge, shuffle } = config;
 
 // Initialize variables
 let machineJudgement = false;
@@ -43,7 +43,7 @@ const getResponseFromAgent = async (agent, prompt, previousMessages) => {
             messages: turnCounter < agents.length ? [{ role: "user", content: prompt }] : previousMessages.concat([{ role: "user", content: prompt }]), // The user's prompt
             stream: false, // Whether to stream the response
             raw: true, // Whether to return the raw response
-            keep_alive: "1s" // The keep-alive interval
+            keep_alive: "2s" // The keep-alive interval
             /*
             options: {
                 repeat_penalty: 5.0, // The penalty for repeating words
@@ -65,7 +65,7 @@ const getResponseFromAgent = async (agent, prompt, previousMessages) => {
         });
 
         // Calculate the evaluation time in nanoseconds
-        totalEvalTimes[agent.name] += response.data.eval_count / response.data.eval_duration * 10**9;
+        totalEvalTimes[agent.name] += response.data.eval_count / response.data.eval_duration * 10 ** 9;
 
         return response.data.message.content; // Return the agent's response
     } catch (error) {
@@ -197,15 +197,38 @@ const evaluateFunctionally = async (agent, latestMessage) => {
 const getVerdict = async (agent, latestMessage, previousMessages) => {
     // Get the verdict based on whether machineJudgement is true or false
     const verdict = machineJudgement ? await getEvaluationByJudge(agent, latestMessage) : await evaluateFunctionally(agent, latestMessage);
-    
+
     // If the verdict evaluation is failed, return the verdict
-    if(verdict.evaluation == "failed") 
+    if (verdict.evaluation == "failed")
         return verdict;
 
+    // Parse the reason from the latest message
+    const messageUnderScrutiny = JSON.parse(latestMessage).reason;
+
+    // Check if the reason is present and is a string
+    if (!messageUnderScrutiny || typeof messageUnderScrutiny !== 'string') {
+        return {
+            evaluation: "failed",
+            reason: "The agent did not provide a reason for voting or reason was not a string."
+        }
+    }
+
     // Check if the agent is plagiarising the previous messages
-    for (const message of previousMessages){
-        const match = await leven(JSON.parse(latestMessage).reason, message.content);
-        if(match && match/latestMessage.length < 0.4){
+    for (const message of previousMessages) {
+
+        if (message.role === "system") continue;
+
+        let messageContent = '';
+        //check if message.content can be parsed as JSON
+        try {
+            messageContent = JSON.parse(message.content).reason;
+        } catch (error) {
+            messageContent = message.content;
+        }       
+
+        const match = await leven(messageUnderScrutiny, messageContent);
+        // The agent is plagiarising the previous messages if the levenshtein distance is less than 25% of the length of the reason or if they are identical
+        if (match / messageUnderScrutiny.length < 0.25 || match === 0) {
             return {
                 evaluation: "failed",
                 reason: "The agent is plagiarising the previous messages"
@@ -215,6 +238,73 @@ const getVerdict = async (agent, latestMessage, previousMessages) => {
 
     // Return the verdict
     return verdict;
+};
+
+/**
+ * Processes the response from an agent.
+ *
+ * @param {string} response - The response from the agent.
+ * @param {Object} agent - The agent whose response is being processed.
+ * @param {Array} previousMessages - The previous messages from the other agents.
+ * @param {boolean} isCorrected - Indicates whether the response is corrected.
+ * @return {Promise<void>} - A promise that resolves when the response is processed.
+ */
+const processResponse = async (response, agent, previousMessages, isCorrected) => {
+    if (response) {
+        // Log the agent's response
+        console.log(`\n\n${agent.name}'s response:\n${response}`);
+
+        try {
+            // Check if it is the last turn
+            if (turnCounter >= agents.length) {
+                // Get the verdict of the agent's response
+                const verdict = await getVerdict(agent, response, messageHistory);
+
+                // Check if the agent passed the evaluation
+                if (verdict.evaluation === "pass") {
+                    // Add the vote against the agent to the votes object
+                    votes[verdict.voteAgainst].against += 1;
+                    // Add the vote information to the message history
+                    // Add the agent's response to the message history
+                    messageHistory.push({ role: "assistant", name: agent.name, content: response });
+                    messageHistory.push({ role: "system", name: "system", content: `${agent.name} voted against ${verdict.voteAgainst}` });
+                } else {
+                    // Add the agent's response to the message history
+                    messageHistory.push({ role: "assistant", name: agent.name, content: response, penalty: true });
+
+                    if (!isCorrected) {    
+                        // Construct the correction prompt
+                        const correctionPrompt = `You are ${agent.name}. CAUTION: You are penalized as you failed the evaluation. 
+                        The reason is ${verdict.reason}. Please correct your response using the latest messages and information provided. Do not apologise and only return corrected response. 
+                        Remember the rules.`;
+
+                        previousMessages.push({ role: "system", name: "system", content: `You responded ${response}` });
+                        // Get the corrected response
+                        const correctedResponse = await getResponseFromAgent(agent, correctionPrompt, previousMessages);
+
+                        // Process the corrected response
+                        await processResponse(correctedResponse, agent, previousMessages, true);
+                    } else {
+                        // Penalize the agent for failing the evaluation
+                        votes[agent.name].against += 1;
+                        // Add the penalty information to the message history
+                        messageHistory.push({ role: "system", name: "system", content: `${agent.name} is penalized as they did not pass the evaluation. The reason is ${verdict.reason}` });
+                    }
+                }
+            } else {
+                // Add the agent's response to the message history
+                messageHistory.push({ role: "assistant", name: agent.name, content: response });
+            }
+        } catch (error) {
+            // Log an error if there is an issue getting the verdict
+            console.error(`Error getting response from the judge`, error);
+        }
+
+        // Log the votes if it is the last turn
+        if (turnCounter >= agents.length) {
+            console.log(`Votes: ${JSON.stringify(votes, null, 2)}`);
+        }
+    }
 };
 
 /**
@@ -233,7 +323,10 @@ You are ${agent.name}.Your response MUST include your argument on why you are a 
 1. voteAgainst: A string type that must explicitly be the name of you are voting against - ${agents.map(agent => agent.name).filter(agent => agent !== agent.name).join(', ')}.
 2. reason: A string type that must explain why you are voting against them.
 
-Note that you cannot vote against yourself. And you cannot repeat yourself.
+Instructions:
+1. you cannot vote against yourself. 
+2. you cannot repeat yourself.
+3. you cannot plagiarize from previous messages.
 
 IMPORTANT: If you fail to follow the instructions, you will be penalized by the judge and a vote will be cast against you.`;
 
@@ -261,38 +354,7 @@ Votes Against Each Agent: ${agents.map(agent => `${agent.name}: ${votes[agent.na
     // Get the response from the agent
     const response = await getResponseFromAgent(agent, prompt, previousMessages);
 
-    if (response) {
-        console.log(`\n\n${agent.name}'s response:\n${response}`);
-
-        try {
-            // Add the agent's response to the message history
-            messageHistory.push({ role: "assistant", name: agent.name, content: response });
-
-            // Check if it is the last turn
-            if (turnCounter >= agents.length) {
-                // Get the verdict of the agent's response
-                const verdict = await getVerdict(agent, response, previousMessages);
-
-                // Check if the agent passed the evaluation
-                if (verdict.evaluation === "pass") {
-                    // Add the vote against the agent to the votes object
-                    votes[verdict.voteAgainst].against += 1;
-                    // Add the vote information to the message history
-                    messageHistory.push({ role: "system", name: "system", content: `${agent.name} voted against ${verdict.voteAgainst}` });
-                } else {
-                    // Penalize the agent for failing the evaluation
-                    votes[agent.name].against += 1;
-                    // Add the penalty information to the message history
-                    messageHistory.push({ role: "system", name: "system", content: `${agent.name} is penalized as they did not pass the evaluation. The reason is ${verdict.reason}` });
-                }
-            }
-        } catch (error) {
-            console.error(`Error getting response from the judge`, error);
-        }
-
-        // Log the votes if it is the last turn
-        turnCounter >= agents.length && console.log(`Votes: ${JSON.stringify(votes, null, 2)}`);
-    }
+    await processResponse(response, agent, previousMessages);
 
     // Increment the turn counter
     turnCounter++;
@@ -327,6 +389,8 @@ const checkForEndCondition = () => {
 app.post('/start', async (req, res) => {
     try {
         turnCounter = 0; // Reset the turn counter
+
+        agents = shuffle(agents); // Shuffle the agents
 
         votes = agents.reduce((obj, agent) => ({ ...obj, [agent.name]: { against: 0 } }), {}); // Initialize the votes object
         totalEvalTimes = agents.reduce((obj, agent) => ({ ...obj, [agent.name]: 0 }), {}); // Initialize the total evaluation times object
