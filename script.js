@@ -7,7 +7,7 @@ let autopilot = false;
 
 const MAX_CHAR_LIMIT = 256;
 
-const agentColors = [
+const colors = [
     'rgba(54, 162, 235, 0.2)',
     'rgba(255, 206, 86, 0.2)',
     'rgba(75, 192, 192, 0.2)',
@@ -15,6 +15,8 @@ const agentColors = [
     'rgba(255, 159, 64, 0.2)',
     'rgba(255, 99, 132, 0.2)'
 ];
+
+let agentColors = [];
 
 let totalAgents = 0;
 
@@ -149,9 +151,6 @@ const updateChat = (messageHistory) => {
     // Clear the chat box
     chatBox.innerHTML = '';
 
-    // Initialize agent message number
-    let agentMessageNo = 0;
-
     // Iterate over each message in the message history
     messageHistory.forEach(message => {
         // Create a new message element
@@ -162,8 +161,7 @@ const updateChat = (messageHistory) => {
 
         // Set the background color of the message element if it is an agent message
         if (message.role !== 'system') {
-            messageElement.style.backgroundColor = agentColors[agentMessageNo];
-            agentMessageNo = (agentMessageNo + 1) % totalAgents;
+            messageElement.style.backgroundColor = agentColors[message.name];
         }
 
         // Create an icon element
@@ -235,9 +233,11 @@ const updateVotesChart = (votes) => {
     const ctx = document.getElementById('votesChart').getContext('2d');
 
     // Update chart if it exists
-    if (votesChart) { 
+    if (votesChart) {
         // Update the data with the votes against each agent
         votesChart.data.datasets[0].data = Object.values(votes).map(vote => vote.against);
+        // Update the labels
+        votesChart.data.labels = Object.keys(votes);
         // Update the chart
         votesChart.update();
         return;
@@ -251,7 +251,7 @@ const updateVotesChart = (votes) => {
             datasets: [{ // Chart dataset
                 label: 'Votes Against', // Dataset label
                 data: Object.values(votes).map(vote => vote.against), // Votes against each agent
-                backgroundColor: agentColors // Agent colors for the chart bars
+                backgroundColor: colors // Agent colors for the chart bars
             }]
         },
         options: { // Chart options
@@ -281,9 +281,11 @@ const updateEvalTimesChart = (totalEvalTimes) => {
     const ctx = document.getElementById('evalTimesChart').getContext('2d');
 
     // Update chart if it exists
-    if (timesChart) { 
+    if (timesChart) {
         // Update the data with the new total evaluation times
         timesChart.data.datasets[0].data = Object.values(totalEvalTimes);
+        // Update the labels
+        timesChart.data.labels = Object.keys(totalEvalTimes);
         // Update the chart
         timesChart.update();
         return;
@@ -297,7 +299,7 @@ const updateEvalTimesChart = (totalEvalTimes) => {
             datasets: [{ // Chart dataset
                 label: 'Total Evaluation Time (s)', // Dataset label
                 data: Object.values(totalEvalTimes), // Total evaluation times for each agent
-                backgroundColor: agentColors // Agent colors for the chart bars
+                backgroundColor: colors // Agent colors for the chart bars
             }]
         },
         options: { // Chart options
@@ -321,7 +323,7 @@ const updateEvalTimesChart = (totalEvalTimes) => {
 const setStatusMessage = (message, blink = false) => {
     // Get the status message element from the HTML document
     const statusMessageElement = document.getElementById('statusMessage');
-    
+
     // Set the innerHTML of the status message element
     // If blink is true, display a blinking icon before the message
     // Otherwise, display the message as is
@@ -348,10 +350,10 @@ document.head.appendChild(style);
 const disableButtons = () => {
     // Disable the "Start Game" button
     document.getElementById('startGame').disabled = true;
-    
+
     // Disable the "Play Turn" button
     document.getElementById('nextTurn').disabled = true;
-    
+
     // Disable the "Autopilot" checkbox if autopilot is not enabled
     if (!autopilot) {
         document.getElementById('autopilot').disabled = true;
@@ -364,10 +366,10 @@ const disableButtons = () => {
 const enableButtons = () => {
     // Enable the "Start Game" button
     document.getElementById('startGame').disabled = false;
-    
+
     // Enable the "Play Turn" button
     document.getElementById('nextTurn').disabled = false;
-    
+
     // Enable the "Autopilot" checkbox
     document.getElementById('autopilot').disabled = false;
 };
@@ -438,6 +440,11 @@ const startGame = async () => {
 
         turnCounter = 0; // Reset the turn counter
         totalAgents = Object.keys(data.votes).length; // Get the total number of agents
+
+        // assign a color to each agent based on their name in the agentColors object
+        Object.keys(data.votes).forEach((name, index) => {
+            agentColors[name] = colors[index % colors.length];
+        });
 
         // Update the chat section of the UI with the initial message history
         updateChat(data.messageHistory);
