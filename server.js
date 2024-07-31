@@ -221,9 +221,10 @@ const getVerdict = async (agent, latestMessage, previousMessages) => {
         let messageContent = '';
         //check if message.content can be parsed as JSON
         try {
-            messageContent = JSON.parse(message.content).reason;
+            const parsedContent = JSON.parse(message.content);
+            messageContent = parsedContent.reason ? parsedContent.reason : "";
         } catch (error) {
-            messageContent = message.content;
+            messageContent = message.content.toString();
         }       
 
         const match = await leven(messageUnderScrutiny, messageContent);
