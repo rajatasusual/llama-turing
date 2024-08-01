@@ -279,7 +279,6 @@ const processResponse = async (response, agent, previousMessages, isCorrected) =
                         The reason is ${verdict.reason}. Please correct your response using the latest messages and information provided. Do not apologise and only return corrected response. 
                         Remember the rules.`;
 
-                        previousMessages.push({ role: "system", name: "system", content: `You responded ${response}` });
                         // Get the corrected response
                         const correctedResponse = await getResponseFromAgent(agent, correctionPrompt, previousMessages);
 
@@ -341,7 +340,7 @@ IMPORTANT: If you fail to follow the instructions, you will be penalized by the 
         } else if (message.name !== agent.name) {
             streamlinedMessages.push({ role: "user", content: `${message.name} says: ${message.content}` });
         } else {
-            streamlinedMessages.push({ role: "assistant", content: `You, ${message.name}, said: ${message.content}` });
+            streamlinedMessages.push({ role: "user", content: `You, ${message.name}, said: ${message.content}` });
         }
         return streamlinedMessages;
     }, []);
